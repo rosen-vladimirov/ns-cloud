@@ -8,7 +8,8 @@
 		"noImplicitAny": true,
 		"experimentalDecorators": true,
 		"noUnusedLocals": true,
-		"alwaysStrict": true
+		"alwaysStrict": true,
+		"noEmitOnError": false
 	},
 	"exclude": [
 		"node_modules",

@@ -4,7 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const _ = require("lodash");
 const os = require("os");
-
+const nodeArgs = [];
 const getBuildVersion = (version) => {
 	let buildVersion = version !== undefined ? version : process.env["BUILD_NUMBER"];
 	if (process.env["BUILD_CAUSE_GHPRBCAUSE"]) {
@@ -94,7 +94,7 @@ module.exports = function (grunt) {
 				options: {
 					execOptions: {
 						env: (function () {
-							var env = shallowCopy(process.env);
+							var env = _.cloneDeep(process.env);
 							env["XUNIT_FILE"] = "test-reports.xml";
 							env["LOG_XUNIT"] = "true";
 							return env;
@@ -112,7 +112,7 @@ module.exports = function (grunt) {
 				options: {
 					execOptions: {
 						env: (function () {
-							var env = shallowCopy(process.env);
+							var env = _.cloneDeep(process.env);
 							env["APPBUILDER_SKIP_POSTINSTALL_TASKS"] = "1";
 							return env;
 						})()

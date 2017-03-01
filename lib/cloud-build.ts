@@ -1,12 +1,15 @@
 export class CloudBuild implements ICommand {
 	constructor(private $errors: IErrors,
 		private $logger: ILogger,
-		private $mobileHelper: Mobile.IMobileHelper) {
+		private $mobileHelper: Mobile.IMobileHelper,
+		private $projectData: IProjectData,
+		private $cloudBuildService: ICloudBuildService) {
 	}
 
 	public async execute(args: string[]): Promise<void> {
 		const platform = this.$mobileHelper.validatePlatformName(args[0]);
 		this.$logger.warn(`Executing cloud build with platform: ${platform}.`);
+		await this.$cloudBuildService.build(this.$projectData.projectDir, this.$projectData.projectId);
 	}
 
 	public async canExecute(args: string[]): Promise<boolean> {
