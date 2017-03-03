@@ -1,5 +1,4 @@
-
-interface IServerConfiguration extends IConfiguration{
+interface IServerConfiguration extends IConfiguration {
 	USE_CDN_FOR_EXTENSION_DOWNLOAD: boolean;
 
 	/**

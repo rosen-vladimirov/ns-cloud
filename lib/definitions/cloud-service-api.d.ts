@@ -10,7 +10,7 @@ declare module CloudService {
 	}
 
 	interface IServiceProxy {
-		call<T>(name: string, method: string, path: string, accept: string, body: IRequestBodyElement[], resultStream: NodeJS.WritableStream, headers?: any): Promise<T>
+		call<T>(name: string, method: string, path: string, accept: string, body: IRequestBodyElement[], resultStream: NodeJS.WritableStream, headers?: any): Promise<T>;
 	}
 
 	interface IAppsBuildServiceContract {

@@ -12,13 +12,15 @@ export class CloudBuild implements ICommand {
 	public async execute(args: string[]): Promise<void> {
 		const platform = this.$mobileHelper.validatePlatformName(args[0]);
 		this.$logger.warn(`Executing cloud build with platform: ${platform}.`);
-		// build(projectDir: string, projectId: string, platform: string, nativescriptData: any, buildConfiguration: string)
 		const nativescriptData = this.$fs.readJson(path.join(this.$projectData.projectDir, "package.json")).nativescript;
-		const pathToCertificate = path.resolve(this.$options.keyStorePath);
-		const pathToProvision = path.resolve(this.$options.provision);
-		await this.$cloudBuildService.build(this.$projectData.projectDir, this.$projectData.projectId, platform, nativescriptData, "Release",
-		{ pathToCertificate, certificatePassword: "123456" },
-		{ pathToCertificate, certificatePassword: "1", pathToProvision });
+		const pathToCertificate = this.$options.keyStorePath ? path.resolve(this.$options.keyStorePath) : "";
+		const pathToProvision = this.$options.provision ? path.resolve(this.$options.provision) : "";
+		const projectSettings = { projectDir: this.$projectData.projectDir, projectId: this.$projectData.projectId, projectName: this.$projectData.projectName, nativescriptData };
+		const buildConfiguration = this.$options.release ? "Release" : "Debug";
+		await this.$cloudBuildService.build(projectSettings,
+			platform, buildConfiguration,
+			{ pathToCertificate, certificatePassword: this.$options.keyStorePassword },
+			{ pathToCertificate, certificatePassword: this.$options.keyStorePassword, pathToProvision });
 	}
 
 	public async canExecute(args: string[]): Promise<boolean> {
