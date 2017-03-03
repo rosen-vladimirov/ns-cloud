@@ -1,17 +1,16 @@
 
-export class ServiceProxy implements Server.IServiceProxy {
+export class ServiceProxy implements CloudService.IServiceProxy {
 	constructor(protected $httpClient: Server.IHttpClient,
 		protected $logger: ILogger,
 		protected $serverConfig: IServerConfiguration,
 		protected $errors: IErrors) {
 	}
 
-	public async call<Т>(name: string, method: string, path: string, accept: string, bodyValues: Server.IRequestBodyElement[], resultStream: NodeJS.WritableStream, headers?: any): Promise<Т> {
+	public async call<Т>(name: string, method: string, path: string, accept: string, bodyValues: CloudService.IRequestBodyElement[], resultStream: NodeJS.WritableStream, headers?: any): Promise<Т> {
 		path = `appbuilder/${path}`;
 		headers = headers || Object.create(null);
 		headers["X-Icenium-SolutionSpace"] = headers["X-Icenium-SolutionSpace"] || "Private_Build_Folder";
 
-		console.log("serverConfig = ", this.$serverConfig);
 		if (accept) {
 			headers.Accept = accept;
 		}
@@ -25,7 +24,6 @@ export class ServiceProxy implements Server.IServiceProxy {
 			pipeTo: resultStream
 		};
 
-		console.log("requestOpts = ", requestOpts);
 		if (bodyValues) {
 			if (bodyValues.length > 1) {
 				throw new Error("TODO: CustomFormData not implemented");
@@ -48,7 +46,9 @@ export class ServiceProxy implements Server.IServiceProxy {
 		}
 
 		this.$logger.debug("%s (%s %s) returned %d", name, method, path, response.response.statusCode);
-		let resultValue = accept === "application/json" ? JSON.parse(response.body) : response.body;
+
+		const resultValue = accept === "application/json" ? JSON.parse(response.body) : response.body;
+
 		return resultValue;
 	}
 }

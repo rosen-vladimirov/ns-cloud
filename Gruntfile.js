@@ -23,6 +23,7 @@ module.exports = function (grunt) {
 	let isPackageJsonModified = false;
 
 	const defaultEnvironment = "sit";
+
 	grunt.initConfig({
 		deploymentEnvironment: process.env["DeploymentEnvironment"] || defaultEnvironment,
 		resourceDownloadEnvironment: process.env["ResourceDownloadEnvironment"] || defaultEnvironment,
@@ -34,18 +35,15 @@ module.exports = function (grunt) {
 			options: grunt.file.readJSON("tsconfig.json").compilerOptions,
 
 			devlib: {
-				src: ["lib/**/*.ts"],
-				reference: "lib/.d.ts"
+				src: ["lib/**/*.ts", "references.d.ts"]
 			},
 
 			devall: {
-				src: ["lib/**/*.ts", "test/**/*.ts"],
-				reference: "lib/.d.ts"
+				src: ["lib/**/*.ts", "test/**/*.ts", "references.d.ts"]
 			},
 
 			release_build: {
-				src: ["lib/**/*.ts", "test/**/*.ts"],
-				reference: "lib/.d.ts",
+				src: ["lib/**/*.ts", "test/**/*.ts", "references.d.ts"],
 				options: {
 					sourceMap: false,
 					removeComments: true
@@ -188,7 +186,7 @@ module.exports = function (grunt) {
 		// get all .d.ts files from nativescript-cli and mobile-cli-lib
 		const nodeModulesDirPath = path.join(__dirname, "node_modules");
 		const pathsOfDtsFiles = getReferencesFromDir(path.join(nodeModulesDirPath, "nativescript"))
-									.concat(getReferencesFromDir(path.join(nodeModulesDirPath, "mobile-cli-lib")));
+			.concat(getReferencesFromDir(path.join(nodeModulesDirPath, "mobile-cli-lib")));
 
 		const lines = pathsOfDtsFiles.map(file => `/// <reference path="${fromWindowsRelativePathToUnix(path.relative(__dirname, file))}" />`);
 

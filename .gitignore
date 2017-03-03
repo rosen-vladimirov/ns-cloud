@@ -40,3 +40,5 @@ jspm_packages
 references.d.ts
 **/*.js
 **/*.js.map
+
+.tscache/**/*
