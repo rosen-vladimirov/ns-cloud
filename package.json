@@ -27,6 +27,7 @@
     "@types/semver": "5.3.30",
     "@types/source-map": "0.5.0",
     "@types/uuid": "2.0.29",
+    "@types/pem": "1.9.0",
     "chai": "3.5.0",
     "chai-as-promised": "6.0.0",
     "grunt": "1.0.1",
@@ -48,6 +49,8 @@
   "dependencies": {
     "cookie": "0.3.1",
     "lodash": "4.17.4",
+    "pem": "1.9.4",
+    "provisioning": "1.5.0",
     "querystring": "0.2.0",
     "semver": "5.3.0",
     "uuid": "3.0.1"

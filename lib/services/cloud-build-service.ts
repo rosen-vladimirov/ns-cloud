@@ -1,6 +1,9 @@
 import * as path from "path";
 import * as semver from "semver";
 import * as uuid from "uuid";
+import * as constants from "../constants";
+import * as pem from "pem"
+const provisioning = require("provisioning");
 
 interface IAmazonStorageEntryData extends CloudService.AmazonStorageEntry {
 	fileNameInS3: string;
@@ -122,7 +125,7 @@ export class CloudBuildService implements ICloudBuildService {
 		const buildConfiguration = buildProps.Properties.BuildConfiguration;
 
 		if (buildConfiguration === "Release") {
-			if (!androidBuildData || !androidBuildData.pathToCertificate || !androidBuildData.certificatePassword) {
+			if (!androidBuildData || !androidBuildData.pathToCertificate) {
 				this.$errors.failWithoutHelp("When building for Release configuration, you must specify valid Certificate and its password.");
 			}
 
@@ -133,7 +136,7 @@ export class CloudBuildService implements ICloudBuildService {
 			const certificateS3Data = await this.uploadFileToS3(projectSettings.projectId, androidBuildData.pathToCertificate);
 
 			buildProps.Properties.keyStoreName = certificateS3Data.fileNameInS3;
-			buildProps.Properties.keyStoreAlias = certificateS3Data.fileNameInS3;
+			buildProps.Properties.keyStoreAlias = await this.getCertificateCommonName(androidBuildData.pathToCertificate, androidBuildData.certificatePassword);
 			buildProps.Properties.keyStorePassword = androidBuildData.certificatePassword;
 			buildProps.Properties.keyStoreAliasPassword = androidBuildData.certificatePassword;
 
@@ -195,12 +198,28 @@ export class CloudBuildService implements ICloudBuildService {
 			}
 		);
 
+		buildProps.Properties.TempKeychainPassword = iOSBuildData.certificatePassword;
+		buildProps.Properties.CodeSigningIdentity = await this.getCertificateCommonName(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword);
+		const provisionData = await this.getMobileProvisionData(iOSBuildData.pathToProvision);
+		const cloudProvisionsData: ICloudProvisionData[] = [{
+			SuffixId: "",
+			TemplateName: "PROVISION_",
+			Identifier: provisionData.UUID,
+			IsDefault: true,
+			FileName: `${provisionData.UUID}.mobileprovision`,
+			AppGroups: [],
+			ProvisionType: "Development",
+			Name: provisionData.Name
+		}];
+		buildProps.Properties.MobileProvisionIdentifiers = JSON.stringify(cloudProvisionsData);
+		buildProps.Properties.DefaultMobileProvisionIdentifier = provisionData.UUID;
+
 		return buildProps;
 	}
 
 	private async downloadBuildResult(buildResult: any, projectDir: string, outputFileName: string): Promise<string> {
 		const buildResultUrl = _.find(buildResult.BuildItems, (b: any) => b.Disposition === "BuildResult").FullPath;
-		const destinationDir = path.join(projectDir, ".ab");
+		const destinationDir = path.join(projectDir, constants.CLOUD_TEMP_DIR_NAME);
 		this.$fs.ensureDirectoryExists(destinationDir);
 
 		const targetFileName = path.join(destinationDir, outputFileName);
@@ -216,13 +235,13 @@ export class CloudBuildService implements ICloudBuildService {
 	}
 
 	private async zipProject(projectDir: string): Promise<string> {
-		let tempDir = path.join(projectDir, ".ab");
+		let tempDir = path.join(projectDir, constants.CLOUD_TEMP_DIR_NAME);
 		this.$fs.ensureDirectoryExists(tempDir);
 
 		let projectZipFile = path.join(tempDir, "Build.zip");
 		this.$fs.deleteFile(projectZipFile);
 
-		let files = this.$projectFilesManager.getProjectFiles(projectDir, ["node_modules", "platforms", ".ab"]);
+		let files = this.$projectFilesManager.getProjectFiles(projectDir, ["node_modules", "platforms", constants.CLOUD_TEMP_DIR_NAME]);
 
 		await this.$fs.zipFiles(projectZipFile, files,
 			p => this.getProjectRelativePath(p, projectDir));
@@ -254,10 +273,43 @@ export class CloudBuildService implements ICloudBuildService {
 		try {
 			const response = await this.$httpClient.httpRequest("http://registry.npmjs.org/nativescript");
 			const versions = _.keys(JSON.parse(response.body).versions);
-			return semver.maxSatisfying(versions, `~${runtimeVersion}`);
+			return "2.5.0" || semver.maxSatisfying(versions, `~${runtimeVersion}`);
 		} catch (err) {
 			return `${semver.major(runtimeVersion)}.${semver.minor(runtimeVersion)}.0`;
 		}
+	}
+
+	private async getCertificateCommonName(certificatePath: string, certificatePassword: string): Promise<string> {
+		return new Promise<string>((resolve, reject) => {
+			pem.readPkcs12(path.resolve(certificatePath), { p12Password: certificatePassword }, (err, obj: any) => {
+				if (err) {
+					reject(err);
+					return;
+				}
+
+				pem.readCertificateInfo(obj.cert, (err, data) => {
+					if (err) {
+						reject(err);
+						return;
+					}
+
+					resolve(data.commonName);
+				});
+			});
+		});
+	}
+
+	private async getMobileProvisionData(provisionPath: string): Promise<IMobileProvisionData> {
+		return new Promise<IMobileProvisionData>((resolve, reject) => {
+			provisioning(path.resolve(provisionPath), (err: Error, obj: any) => {
+				if (err) {
+					reject(err);
+					return;
+				}
+
+				resolve(obj);
+			});
+		});
 	}
 }
 $injector.register("cloudBuildService", CloudBuildService);
