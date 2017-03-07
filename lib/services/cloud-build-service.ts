@@ -96,8 +96,8 @@ export class CloudBuildService implements ICloudBuildService {
 
 	}
 
-	private async uploadFileToS3(projectId: string, localFilePath: string): Promise<IAmazonStorageEntryData> {
-		const fileNameInS3 = uuid.v4();
+	private async uploadFileToS3(projectId: string, localFilePath: string, extension: string = ""): Promise<IAmazonStorageEntryData> {
+		const fileNameInS3 = uuid.v4() + extension;
 		const preSignedUrlData = await this.$server.appsBuild.getPresignedUploadUrlObject(projectId, fileNameInS3);
 
 		const requestOpts: any = {
@@ -166,7 +166,7 @@ export class CloudBuildService implements ICloudBuildService {
 		}
 
 		const certificateS3Data = await this.uploadFileToS3(projectSettings.projectId, iOSBuildData.pathToCertificate);
-		const provisonS3Data = await this.uploadFileToS3(projectSettings.projectId, iOSBuildData.pathToProvision);
+		const provisonS3Data = await this.uploadFileToS3(projectSettings.projectId, iOSBuildData.pathToProvision, ".mobileprovision");
 
 		// Add to buildProps.Properties some of these.
 		// "Simulator": "False",
