@@ -1,6 +1,6 @@
 {
-	"AB_SERVER_PROTO": "http",
-	"AB_SERVER": "localhost",
+	"AB_SERVER_PROTO": "https",
+	"AB_SERVER": "sit-platform.telerik.rocks",
 	"DEBUG": false,
 	"USE_PROXY": true,
 	"ON_PREM": false,
