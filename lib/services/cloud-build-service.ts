@@ -198,7 +198,7 @@ export class CloudBuildService implements ICloudBuildService {
 			}
 		);
 
-		buildProps.Properties.TempKeychainPassword = iOSBuildData.certificatePassword;
+		buildProps.Properties.CertificatePassword = iOSBuildData.certificatePassword;
 		buildProps.Properties.CodeSigningIdentity = await this.getCertificateCommonName(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword);
 		const provisionData = await this.getMobileProvisionData(iOSBuildData.pathToProvision);
 		const cloudProvisionsData: ICloudProvisionData[] = [{
@@ -206,7 +206,7 @@ export class CloudBuildService implements ICloudBuildService {
 			TemplateName: "PROVISION_",
 			Identifier: provisionData.UUID,
 			IsDefault: true,
-			FileName: `${provisionData.UUID}.mobileprovision`,
+			FileName: `${provisonS3Data.fileNameInS3}.mobileprovision`,
 			AppGroups: [],
 			ProvisionType: "Development",
 			Name: provisionData.Name
