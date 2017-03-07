@@ -2,7 +2,7 @@
   "name": "ns-cloud",
   "version": "0.1.0",
   "description": "Used for cloud support in NativeScript CLI",
-  "main": "index.js",
+  "main": "lib/bootstrap.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
