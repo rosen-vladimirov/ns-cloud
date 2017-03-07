@@ -38,7 +38,6 @@ jspm_packages
 
 # Lib specific files:
 references.d.ts
-**/*.js
 **/*.js.map
 
 .tscache/**/*
