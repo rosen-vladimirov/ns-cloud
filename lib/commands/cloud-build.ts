@@ -7,6 +7,7 @@ export class CloudBuild implements ICommand {
 		private $cloudBuildService: ICloudBuildService,
 		private $options: IOptions,
 		private $fs: IFileSystem) {
+		this.$projectData.initializeProjectData();
 	}
 
 	public async execute(args: string[]): Promise<void> {
