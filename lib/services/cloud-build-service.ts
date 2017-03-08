@@ -45,7 +45,7 @@ export class CloudBuildService implements ICloudBuildService {
 
 		const buildResult: any = await this.$server.appsBuild.buildProject(projectSettings.projectId, buildProps);
 
-		if (!buildResult.BuildItems) {
+		if (!buildResult.BuildItems || !buildResult.BuildItems.length) {
 			// Something failed
 			// Fail with combination of Errors and Output:
 			this.$errors.failWithoutHelp(`Build failed. Reason is: ${buildResult.Errors}. Additional information: ${buildResult.Output}.`);
