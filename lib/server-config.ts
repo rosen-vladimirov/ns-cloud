@@ -21,7 +21,13 @@ export class ServerConfiguration implements IServerConfiguration { // User speci
 	debugLivesync: boolean;
 
 	/*don't require logger and everything that has logger as dependency in config.js due to cyclic dependency*/
-	constructor(protected $fs: IFileSystem) {
+	constructor(protected $fs: IFileSystem,
+		protected $options: IProfileDir) {
+		let baseConfigPath = this.getConfigPath("config-base");
+		if (!this.$fs.exists(baseConfigPath)) {
+			this.$fs.writeJson(baseConfigPath, this.loadConfig("config-base", { local: true }));
+		}
+
 		let configPath = this.getConfigPath("config");
 		if (!this.$fs.exists(configPath)) {
 			let configBase = this.loadConfig("config-base");
@@ -47,13 +53,14 @@ export class ServerConfiguration implements IServerConfiguration { // User speci
 		console.log(config);
 	}
 
-	protected loadConfig(name: string): any {
-		let configFileName = this.getConfigPath(name);
+	protected loadConfig(name: string, options?: IConfigOptions): any {
+		let configFileName = this.getConfigPath(name, options);
 		return this.$fs.readJson(configFileName);
 	}
 
-	protected getConfigPath(filename: string): string {
-		return path.join(__dirname, "../server-configs/", filename + ".json");
+	protected getConfigPath(filename: string, options?: IConfigOptions): string {
+		let dirname = options && options.local ? path.join(__dirname, "../server-configs/") : this.$options.profileDir;
+		return path.join(dirname, filename + ".json");
 	}
 
 	private saveConfig(config: IServerConfiguration, name: string): void {

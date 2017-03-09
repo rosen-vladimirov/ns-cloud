@@ -27,6 +27,5 @@ interface ICloudProvisionData {
 	IsDefault: boolean;
 	FileName: string;
 	AppGroups: string[];
-	ProvisionType: string;
 	Name: string;
 }

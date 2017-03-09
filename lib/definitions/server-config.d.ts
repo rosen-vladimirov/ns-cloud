@@ -15,3 +15,13 @@ interface IServerConfiguration extends IConfiguration {
 	apply(configName: string): void;
 	printConfigData(): void;
 }
+
+/**
+ * Describes options that can be passed to load/get configuration methods
+ */
+interface IConfigOptions {
+	/**
+	 * Whether to load/get a local path (i.e. from within this package) or from a global one
+	 */
+	local: boolean;
+}
