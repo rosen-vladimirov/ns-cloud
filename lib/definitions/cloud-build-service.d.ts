@@ -5,8 +5,26 @@ interface IBuildResultData {
 }
 
 interface ICloudBuildService {
-	build(projectSettings: { projectDir: string, projectId: string, projectName: string, nativescriptData: any },
+	build(projectSettings: IProjectSettings,
 		platform: string, buildConfiguration: string,
-		androidBuildData?: { pathToCertificate: string, certificatePassword: string },
-		iOSBuildData?: { pathToProvision: string, pathToCertificate: string, certificatePassword: string }): Promise<IBuildResultData>;
+		androidBuildData?: IAndroidBuildData,
+		iOSBuildData?: IIOSBuildData): Promise<IBuildResultData>;
+}
+
+interface IProjectSettings {
+	projectDir: string;
+	projectId: string;
+	projectName: string;
+	nativescriptData: any;
+}
+
+interface IAndroidBuildData {
+	pathToCertificate: string;
+	certificatePassword: string;
+}
+
+interface IIOSBuildData extends IBuildForDevice {
+	pathToProvision: string;
+	pathToCertificate: string;
+	certificatePassword: string;
 }

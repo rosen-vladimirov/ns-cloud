@@ -29,7 +29,7 @@ export class CloudBuild implements ICommand {
 		await this.$cloudBuildService.build(projectSettings,
 			platform, buildConfiguration,
 			{ pathToCertificate, certificatePassword: this.$options.keyStorePassword },
-			{ pathToCertificate, certificatePassword: this.$options.certificatePassword, pathToProvision });
+			{ pathToCertificate, certificatePassword: this.$options.certificatePassword, pathToProvision, buildForDevice: !this.$options.emulator });
 	}
 
 	public async canExecute(args: string[]): Promise<boolean> {

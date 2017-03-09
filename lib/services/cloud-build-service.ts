@@ -19,10 +19,10 @@ export class CloudBuildService implements ICloudBuildService {
 		private $mobileHelper: Mobile.IMobileHelper) { }
 
 	// We should decorate this method... hacks are needed!!!
-	public async build(projectSettings: { projectDir: string, projectId: string, projectName: string, nativescriptData: any },
+	public async build(projectSettings: IProjectSettings,
 		platform: string, buildConfiguration: string,
-		androidBuildData?: { pathToCertificate: string, certificatePassword: string },
-		iOSBuildData?: { pathToProvision: string, pathToCertificate: string, certificatePassword: string }): Promise<IBuildResultData> {
+		androidBuildData?: IAndroidBuildData,
+		iOSBuildData?: IIOSBuildData): Promise<IBuildResultData> {
 
 		// TODO: Add validation for all options before uploading the package to S3.
 
@@ -36,10 +36,10 @@ export class CloudBuildService implements ICloudBuildService {
 			outputFileName += ".apk";
 		} else if (this.$mobileHelper.isiOSPlatform(platform)) {
 			buildProps = await this.getiOSBuildProperties(projectSettings, buildProps, iOSBuildData);
-			if (buildProps.Properties.BuildForiOSSimulator) {
-				outputFileName += ".zip";
-			} else {
+			if (iOSBuildData.buildForDevice) {
 				outputFileName += ".ipa";
+			} else {
+				outputFileName += ".zip";
 			}
 		}
 
@@ -118,9 +118,9 @@ export class CloudBuildService implements ICloudBuildService {
 		return amazonStorageEntryData;
 	}
 
-	private async getAndroidBuildProperties(projectSettings: { projectDir: string, projectId: string, projectName: string },
+	private async getAndroidBuildProperties(projectSettings: IProjectSettings,
 		buildProps: any,
-		androidBuildData?: { pathToCertificate: string, certificatePassword: string }): Promise<any> {
+		androidBuildData?: IAndroidBuildData): Promise<any> {
 
 		const buildConfiguration = buildProps.Properties.BuildConfiguration;
 
@@ -149,70 +149,73 @@ export class CloudBuildService implements ICloudBuildService {
 		return buildProps;
 	}
 
-	private async getiOSBuildProperties(projectSettings: { projectDir: string, projectId: string, projectName: string },
+	private async getiOSBuildProperties(projectSettings: IProjectSettings,
 		buildProps: any,
-		iOSBuildData: { pathToProvision: string, pathToCertificate: string, certificatePassword: string }): Promise<any> {
+		iOSBuildData: IIOSBuildData): Promise<any> {
 
-		if (!iOSBuildData || !iOSBuildData.pathToCertificate || !iOSBuildData.certificatePassword || !iOSBuildData.pathToProvision) {
-			this.$errors.failWithoutHelp("When building for iOS you must specify valid Mobile Provision, Certificate and its password.");
-		}
-
-		if (!this.$fs.exists(iOSBuildData.pathToCertificate)) {
-			this.$errors.failWithoutHelp(`The specified certificate: ${iOSBuildData.pathToCertificate} does not exist. Verify the location is correct.`);
-		}
-
-		if (!this.$fs.exists(iOSBuildData.pathToProvision)) {
-			this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToCertificate} does not exist. Verify the location is correct.`);
-		}
-
-		const certificateS3Data = await this.uploadFileToS3(projectSettings.projectId, iOSBuildData.pathToCertificate);
-		const provisonS3Data = await this.uploadFileToS3(projectSettings.projectId, iOSBuildData.pathToProvision, ".mobileprovision");
-
-		// Add to buildProps.Properties some of these.
-		// "Simulator": "False",
-		// "BuildForiOSSimulator": false,
-
-		// "iOSCodesigningIdentity": certificateS3Data.fileNameInS3,
-		// "CodeSigningIdentity": "iPhone Developer: Dragon Telrrikov (J45P439R9U)",
-		// "TempKeychainName": uuid.v4(),
-		// "TempKeychainPassword": iOSBuildData.certificatePassword,
-		// "MobileProvisionIdentifiers": [{
-		// 	"SuffixId": "",
-		// 	"TemplateName": "PROVISION_",
-		// 	"Identifier": provisonS3Data.fileNameInS3,
-		// 	"IsDefault": true,
-		// 	"FileName": provisonS3Data.fileNameInS3,
-		// 	"AppGroups": [],
-		// 	"ProvisionType": "Development",
-		// 	"Name": provisonS3Data.fileNameInS3
-		// }],
-
-		buildProps.BuildFiles.push(
-			{
-				sourceUri: certificateS3Data.S3Url,
-				disposition: "Keychain"
-			},
-			{
-				sourceUri: provisonS3Data.S3Url,
-				disposition: "Provision"
+		if (iOSBuildData.buildForDevice) {
+			if (!iOSBuildData || !iOSBuildData.pathToCertificate || !iOSBuildData.certificatePassword || !iOSBuildData.pathToProvision) {
+				this.$errors.failWithoutHelp("When building for iOS you must specify valid Mobile Provision, Certificate and its password.");
 			}
-		);
 
-		buildProps.Properties.CertificatePassword = iOSBuildData.certificatePassword;
-		buildProps.Properties.CodeSigningIdentity = await this.getCertificateCommonName(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword);
-		const provisionData = await this.getMobileProvisionData(iOSBuildData.pathToProvision);
-		const cloudProvisionsData: ICloudProvisionData[] = [{
-			SuffixId: "",
-			TemplateName: "PROVISION_",
-			Identifier: provisionData.UUID,
-			IsDefault: true,
-			FileName: `${provisonS3Data.fileNameInS3}.mobileprovision`,
-			AppGroups: [],
-			ProvisionType: "Development",
-			Name: provisionData.Name
-		}];
-		buildProps.Properties.MobileProvisionIdentifiers = JSON.stringify(cloudProvisionsData);
-		buildProps.Properties.DefaultMobileProvisionIdentifier = provisionData.UUID;
+			if (!this.$fs.exists(iOSBuildData.pathToCertificate)) {
+				this.$errors.failWithoutHelp(`The specified certificate: ${iOSBuildData.pathToCertificate} does not exist. Verify the location is correct.`);
+			}
+
+			if (!this.$fs.exists(iOSBuildData.pathToProvision)) {
+				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToCertificate} does not exist. Verify the location is correct.`);
+			}
+
+			const certificateS3Data = await this.uploadFileToS3(projectSettings.projectId, iOSBuildData.pathToCertificate);
+			const provisonS3Data = await this.uploadFileToS3(projectSettings.projectId, iOSBuildData.pathToProvision, ".mobileprovision");
+
+			// Add to buildProps.Properties some of these.
+			// "Simulator": "False",
+			// "BuildForiOSSimulator": false,
+
+			// "iOSCodesigningIdentity": certificateS3Data.fileNameInS3,
+			// "CodeSigningIdentity": "iPhone Developer: Dragon Telrrikov (J45P439R9U)",
+			// "TempKeychainName": uuid.v4(),
+			// "TempKeychainPassword": iOSBuildData.certificatePassword,
+			// "MobileProvisionIdentifiers": [{
+			// 	"SuffixId": "",
+			// 	"TemplateName": "PROVISION_",
+			// 	"Identifier": provisonS3Data.fileNameInS3,
+			// 	"IsDefault": true,
+			// 	"FileName": provisonS3Data.fileNameInS3,
+			// 	"AppGroups": [],
+			// 	"ProvisionType": "Development",
+			// 	"Name": provisonS3Data.fileNameInS3
+			// }],
+
+			buildProps.BuildFiles.push(
+				{
+					sourceUri: certificateS3Data.S3Url,
+					disposition: "Keychain"
+				},
+				{
+					sourceUri: provisonS3Data.S3Url,
+					disposition: "Provision"
+				}
+			);
+
+			buildProps.Properties.CertificatePassword = iOSBuildData.certificatePassword;
+			buildProps.Properties.CodeSigningIdentity = await this.getCertificateCommonName(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword);
+			const provisionData = await this.getMobileProvisionData(iOSBuildData.pathToProvision);
+			const cloudProvisionsData: ICloudProvisionData[] = [{
+				SuffixId: "",
+				TemplateName: "PROVISION_",
+				Identifier: provisionData.UUID,
+				IsDefault: true,
+				FileName: `${provisonS3Data.fileNameInS3}.mobileprovision`,
+				AppGroups: [],
+				Name: provisionData.Name
+			}];
+			buildProps.Properties.MobileProvisionIdentifiers = JSON.stringify(cloudProvisionsData);
+			buildProps.Properties.DefaultMobileProvisionIdentifier = provisionData.UUID;
+		} else {
+			buildProps.Properties.Simulator = true;
+		}
 
 		return buildProps;
 	}
