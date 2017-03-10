@@ -9,6 +9,10 @@ interface ICloudBuildService {
 		platform: string, buildConfiguration: string,
 		androidBuildData?: IAndroidBuildData,
 		iOSBuildData?: IIOSBuildData): Promise<IBuildResultData>;
+	validateBuildProperties(platform: string,
+		buildConfiguration: string,
+		androidBuildData?: IAndroidBuildData,
+		iOSBuildData?: IIOSBuildData): Promise<void>;
 }
 
 interface IProjectSettings {

@@ -60,6 +60,38 @@ export class CloudBuildService implements ICloudBuildService {
 		};
 	}
 
+	public async validateBuildProperties(platform: string, buildConfiguration: string, androidBuildData?: IAndroidBuildData,
+		iOSBuildData?: IIOSBuildData): Promise<void> {
+		if (this.$mobileHelper.isAndroidPlatform(platform) && this.isReleaseConfiguration(buildConfiguration)) {
+			if (!androidBuildData || !androidBuildData.pathToCertificate) {
+				this.$errors.failWithoutHelp("When building for Release configuration, you must specify valid Certificate and its password.");
+			}
+
+			if (!this.$fs.exists(androidBuildData.pathToCertificate)) {
+				this.$errors.failWithoutHelp(`The specified certificate: ${androidBuildData.pathToCertificate} does not exist. Verify the location is correct.`);
+			}
+		} else if (this.$mobileHelper.isiOSPlatform(platform) && iOSBuildData.buildForDevice) {
+			if (!iOSBuildData || !iOSBuildData.pathToCertificate || !iOSBuildData.certificatePassword || !iOSBuildData.pathToProvision) {
+				this.$errors.failWithoutHelp("When building for iOS you must specify valid Mobile Provision, Certificate and its password.");
+			}
+
+			if (!this.$fs.exists(iOSBuildData.pathToCertificate)) {
+				this.$errors.failWithoutHelp(`The specified certificate: ${iOSBuildData.pathToCertificate} does not exist. Verify the location is correct.`);
+			}
+
+			if (!this.$fs.exists(iOSBuildData.pathToProvision)) {
+				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToProvision} does not exist. Verify the location is correct.`);
+			}
+
+			let certData = this.getCertificateBase64((await this.getCertificateData(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword)).cert);
+			let provisionCertificatesBase64 = (await this.getMobileProvisionData(iOSBuildData.pathToProvision)).DeveloperCertificates.map(c => c.toString('base64'));
+
+			if (!_.includes(provisionCertificatesBase64, certData)) {
+				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToProvision} does not include the specified certificate: ${iOSBuildData.pathToCertificate}. Please specify a different provision or certificate.`);
+			}
+		}
+	}
+
 	private async prepareBuildRequest(projectSettings: { projectDir: string, projectId: string, projectName: string, nativescriptData: any },
 		platform: string, buildConfiguration: string): Promise<any> {
 
@@ -116,38 +148,6 @@ export class CloudBuildService implements ICloudBuildService {
 		const amazonStorageEntryData: IAmazonStorageEntryData = _.merge({ fileNameInS3 }, preSignedUrlData, );
 
 		return amazonStorageEntryData;
-	}
-
-	private async validateBuildProperties(platform: string, buildConfiguration: string, androidBuildData?: IAndroidBuildData,
-		iOSBuildData?: IIOSBuildData): Promise<void> {
-		if (this.$mobileHelper.isAndroidPlatform(platform) && this.isReleaseConfiguration(buildConfiguration)) {
-			if (!androidBuildData || !androidBuildData.pathToCertificate) {
-				this.$errors.failWithoutHelp("When building for Release configuration, you must specify valid Certificate and its password.");
-			}
-
-			if (!this.$fs.exists(androidBuildData.pathToCertificate)) {
-				this.$errors.failWithoutHelp(`The specified certificate: ${androidBuildData.pathToCertificate} does not exist. Verify the location is correct.`);
-			}
-		} else if (this.$mobileHelper.isiOSPlatform(platform) && iOSBuildData.buildForDevice) {
-			if (!iOSBuildData || !iOSBuildData.pathToCertificate || !iOSBuildData.certificatePassword || !iOSBuildData.pathToProvision) {
-				this.$errors.failWithoutHelp("When building for iOS you must specify valid Mobile Provision, Certificate and its password.");
-			}
-
-			if (!this.$fs.exists(iOSBuildData.pathToCertificate)) {
-				this.$errors.failWithoutHelp(`The specified certificate: ${iOSBuildData.pathToCertificate} does not exist. Verify the location is correct.`);
-			}
-
-			if (!this.$fs.exists(iOSBuildData.pathToProvision)) {
-				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToProvision} does not exist. Verify the location is correct.`);
-			}
-
-			let certData = this.getCertificateBase64((await this.getCertificateData(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword)).cert);
-			let provisionCertificatesBase64 = (await this.getMobileProvisionData(iOSBuildData.pathToProvision)).DeveloperCertificates.map(c => c.toString('base64'));
-
-			if (!_.includes(provisionCertificatesBase64, certData)) {
-				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToProvision} does not include the specified certificate: ${iOSBuildData.pathToCertificate}. Please specify a different provision or certificate.`);
-			}
-		}
 	}
 
 	private getCertificateBase64(cert: string) {
