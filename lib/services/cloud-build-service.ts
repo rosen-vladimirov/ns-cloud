@@ -25,7 +25,7 @@ export class CloudBuildService implements ICloudBuildService {
 		iOSBuildData?: IIOSBuildData): Promise<IBuildResultData> {
 
 		// TODO: Add validation for all options before uploading the package to S3.
-
+		await this.validateBuildProperties(platform, buildConfiguration, androidBuildData, iOSBuildData);
 		let buildProps = await this.prepareBuildRequest(projectSettings, platform, buildConfiguration);
 
 		// TODO: Check with Nadya why we do not receive this information.
@@ -118,13 +118,9 @@ export class CloudBuildService implements ICloudBuildService {
 		return amazonStorageEntryData;
 	}
 
-	private async getAndroidBuildProperties(projectSettings: IProjectSettings,
-		buildProps: any,
-		androidBuildData?: IAndroidBuildData): Promise<any> {
-
-		const buildConfiguration = buildProps.Properties.BuildConfiguration;
-
-		if (buildConfiguration === "Release") {
+	private async validateBuildProperties(platform: string, buildConfiguration: string, androidBuildData?: IAndroidBuildData,
+		iOSBuildData?: IIOSBuildData): Promise<void> {
+		if (this.$mobileHelper.isAndroidPlatform(platform) && this.isReleaseConfiguration(buildConfiguration)) {
 			if (!androidBuildData || !androidBuildData.pathToCertificate) {
 				this.$errors.failWithoutHelp("When building for Release configuration, you must specify valid Certificate and its password.");
 			}
@@ -132,7 +128,39 @@ export class CloudBuildService implements ICloudBuildService {
 			if (!this.$fs.exists(androidBuildData.pathToCertificate)) {
 				this.$errors.failWithoutHelp(`The specified certificate: ${androidBuildData.pathToCertificate} does not exist. Verify the location is correct.`);
 			}
+		} else if (this.$mobileHelper.isiOSPlatform(platform) && iOSBuildData.buildForDevice) {
+			if (!iOSBuildData || !iOSBuildData.pathToCertificate || !iOSBuildData.certificatePassword || !iOSBuildData.pathToProvision) {
+				this.$errors.failWithoutHelp("When building for iOS you must specify valid Mobile Provision, Certificate and its password.");
+			}
 
+			if (!this.$fs.exists(iOSBuildData.pathToCertificate)) {
+				this.$errors.failWithoutHelp(`The specified certificate: ${iOSBuildData.pathToCertificate} does not exist. Verify the location is correct.`);
+			}
+
+			if (!this.$fs.exists(iOSBuildData.pathToProvision)) {
+				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToProvision} does not exist. Verify the location is correct.`);
+			}
+
+			let certData = this.getCertificateBase64((await this.getCertificateData(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword)).cert);
+			let provisionCertificatesBase64 = (await this.getMobileProvisionData(iOSBuildData.pathToProvision)).DeveloperCertificates.map(c => c.toString('base64'));
+
+			if (!_.includes(provisionCertificatesBase64, certData)) {
+				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToProvision} does not include the specified certificate: ${iOSBuildData.pathToCertificate}. Please specify a different provision or certificate.`);
+			}
+		}
+	}
+
+	private getCertificateBase64(cert: string) {
+		return cert.substr(constants.CRYPTO.CERTIFICATE_HEADER.length).slice(0, -constants.CRYPTO.CERTIFICATE_FOOTER.length).replace(/\s/g, "");
+	}
+
+	private async getAndroidBuildProperties(projectSettings: IProjectSettings,
+		buildProps: any,
+		androidBuildData?: IAndroidBuildData): Promise<any> {
+
+		const buildConfiguration = buildProps.Properties.BuildConfiguration;
+
+		if (this.isReleaseConfiguration(buildConfiguration)) {
 			const certificateS3Data = await this.uploadFileToS3(projectSettings.projectId, androidBuildData.pathToCertificate);
 
 			buildProps.Properties.keyStoreName = certificateS3Data.fileNameInS3;
@@ -154,18 +182,6 @@ export class CloudBuildService implements ICloudBuildService {
 		iOSBuildData: IIOSBuildData): Promise<any> {
 
 		if (iOSBuildData.buildForDevice) {
-			if (!iOSBuildData || !iOSBuildData.pathToCertificate || !iOSBuildData.certificatePassword || !iOSBuildData.pathToProvision) {
-				this.$errors.failWithoutHelp("When building for iOS you must specify valid Mobile Provision, Certificate and its password.");
-			}
-
-			if (!this.$fs.exists(iOSBuildData.pathToCertificate)) {
-				this.$errors.failWithoutHelp(`The specified certificate: ${iOSBuildData.pathToCertificate} does not exist. Verify the location is correct.`);
-			}
-
-			if (!this.$fs.exists(iOSBuildData.pathToProvision)) {
-				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToCertificate} does not exist. Verify the location is correct.`);
-			}
-
 			const certificateS3Data = await this.uploadFileToS3(projectSettings.projectId, iOSBuildData.pathToCertificate);
 			const provisonS3Data = await this.uploadFileToS3(projectSettings.projectId, iOSBuildData.pathToProvision, ".mobileprovision");
 
@@ -202,13 +218,14 @@ export class CloudBuildService implements ICloudBuildService {
 			buildProps.Properties.CertificatePassword = iOSBuildData.certificatePassword;
 			buildProps.Properties.CodeSigningIdentity = await this.getCertificateCommonName(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword);
 			const provisionData = await this.getMobileProvisionData(iOSBuildData.pathToProvision);
-			const cloudProvisionsData: ICloudProvisionData[] = [{
+			const cloudProvisionsData: any[] = [{
 				SuffixId: "",
 				TemplateName: "PROVISION_",
 				Identifier: provisionData.UUID,
 				IsDefault: true,
-				FileName: `${provisonS3Data.fileNameInS3}.mobileprovision`,
+				FileName: `${provisonS3Data.fileNameInS3}`,
 				AppGroups: [],
+				ProvisionType: this.getProvisionType(provisionData),
 				Name: provisionData.Name
 			}];
 			buildProps.Properties.MobileProvisionIdentifiers = JSON.stringify(cloudProvisionsData);
@@ -218,6 +235,26 @@ export class CloudBuildService implements ICloudBuildService {
 		}
 
 		return buildProps;
+	}
+
+	private getProvisionType(provisionData: IMobileProvisionData): string {
+		// TODO: Discuss whether this code should be moved to the Tooling
+		let result = "";
+		if (provisionData.Entitlements['get-task-allow']) {
+			result = "Development";
+		} else {
+			result = "AdHoc";
+		}
+
+		if (!provisionData.ProvisionedDevices || !provisionData.ProvisionedDevices.length) {
+			if (provisionData.ProvisionsAllDevices) {
+				result = "Enterprise";
+			} else {
+				result = "App Store";
+			}
+		}
+
+		return result;
 	}
 
 	private async downloadBuildResult(buildResult: any, projectDir: string, outputFileName: string): Promise<string> {
@@ -283,21 +320,32 @@ export class CloudBuildService implements ICloudBuildService {
 	}
 
 	private async getCertificateCommonName(certificatePath: string, certificatePassword: string): Promise<string> {
-		return new Promise<string>((resolve, reject) => {
-			pem.readPkcs12(path.resolve(certificatePath), { p12Password: certificatePassword }, (err, obj: any) => {
+		return (await this.getCertificateInfo(certificatePath, certificatePassword)).commonName;
+	}
+
+	private async getCertificateInfo(certificatePath: string, certificatePassword: string): Promise<pem.CertificateSubjectReadResult> {
+		let certData = await this.getCertificateData(certificatePath, certificatePassword);
+		return new Promise<pem.CertificateSubjectReadResult>((resolve, reject) => {
+			pem.readCertificateInfo(certData.cert, (err, data) => {
 				if (err) {
 					reject(err);
 					return;
 				}
 
-				pem.readCertificateInfo(obj.cert, (err, data) => {
-					if (err) {
-						reject(err);
-						return;
-					}
+				resolve(data);
+			});
+		});
+	}
 
-					resolve(data.commonName);
-				});
+	private async getCertificateData(certificatePath: string, certificatePassword: string): Promise<ICertificateData> {
+		return new Promise<ICertificateData>((resolve, reject) => {
+			pem.readPkcs12(path.resolve(certificatePath), { p12Password: certificatePassword }, (err, data: any) => {
+				if (err) {
+					reject(err);
+					return;
+				}
+
+				resolve(data);
 			});
 		});
 	}
@@ -313,6 +361,10 @@ export class CloudBuildService implements ICloudBuildService {
 				resolve(obj);
 			});
 		});
+	}
+
+	private isReleaseConfiguration(buildConfiguration: string): boolean {
+		return buildConfiguration.toLowerCase() === constants.RELEASE_CONFIGURATION_NAME;
 	}
 }
 $injector.register("cloudBuildService", CloudBuildService);

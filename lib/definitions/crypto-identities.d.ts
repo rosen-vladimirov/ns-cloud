@@ -11,6 +11,7 @@ interface IMobileProvisionData {
 		'com.apple.developer.team-identifier': string;
 	};
 	ExpirationDate: Date;
+	ProvisionsAllDevices?: boolean;
 	Name: string;
 	ProvisionedDevices: string[];
 	TeamIdentifier: string[];
@@ -28,4 +29,10 @@ interface ICloudProvisionData {
 	FileName: string;
 	AppGroups: string[];
 	Name: string;
+}
+
+interface ICertificateData {
+	cert: string;
+	ca: any[];
+	key: string;
 }
