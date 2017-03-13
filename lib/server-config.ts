@@ -23,18 +23,16 @@ export class ServerConfiguration implements IServerConfiguration { // User speci
 	/*don't require logger and everything that has logger as dependency in config.js due to cyclic dependency*/
 	constructor(protected $fs: IFileSystem,
 		protected $options: IProfileDir) {
-		let baseConfigPath = this.getConfigPath("config-base");
-		if (!this.$fs.exists(baseConfigPath)) {
-			this.$fs.writeJson(baseConfigPath, this.loadConfig("config-base", { local: true }));
+		let baseConfigPath = this.getConfigPath("config");
+
+		let serverConfig: IServerConfiguration = null;
+		if (this.$fs.exists(baseConfigPath)) {
+			serverConfig = this.loadConfig("config");
+		} else {
+			serverConfig = this.loadConfig("config-base", { local: true });
 		}
 
-		let configPath = this.getConfigPath("config");
-		if (!this.$fs.exists(configPath)) {
-			let configBase = this.loadConfig("config-base");
-			this.$fs.writeJson(configPath, configBase);
-		} else {
-			this.mergeConfig(this, this.loadConfig("config"));
-		}
+		this.mergeConfig(this, serverConfig);
 	}
 
 	public reset(): void {
