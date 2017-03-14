@@ -16,7 +16,8 @@ export class CloudBuildService implements ICloudBuildService {
 		private $projectFilesManager: IProjectFilesManager,
 		private $errors: IErrors,
 		private $server: CloudService.IServer,
-		private $mobileHelper: Mobile.IMobileHelper) { }
+		private $mobileHelper: Mobile.IMobileHelper,
+		private $projectHelper: IProjectHelper) { }
 
 	// We should decorate this method... hacks are needed!!!
 	public async build(projectSettings: IProjectSettings,
@@ -114,7 +115,7 @@ export class CloudBuildService implements ICloudBuildService {
 				RuntimeVersion: runtimeVersion,
 				AcceptResults: "Url;LocalPath",
 				SessionKey: buildPreSignedUrlData.SessionKey,
-				TemplateAppName: projectSettings.projectName,
+				TemplateAppName: this.$projectHelper.sanitizeName(projectSettings.projectName),
 				Framework: "tns"
 			},
 			BuildFiles: [
