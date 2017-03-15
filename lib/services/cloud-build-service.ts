@@ -17,7 +17,6 @@ export class CloudBuildService implements ICloudBuildService {
 		private $errors: IErrors,
 		private $server: CloudService.IServer,
 		private $mobileHelper: Mobile.IMobileHelper,
-		// private $iOSDeploymentValidatorBase: IIOSDeploymentValidatorBase,
 		private $projectHelper: IProjectHelper) { }
 
 	// We should decorate this method... hacks are needed!!!
@@ -91,12 +90,11 @@ export class CloudBuildService implements ICloudBuildService {
 			const certInfo = this.getCertificateInfo(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword);
 			const certBase64 = this.getCertificateBase64(certInfo.pemCert);
 			const provisionData = await this.getMobileProvisionData(iOSBuildData.pathToProvision);
-			const provisionCertificatesBase64 = provisionData.DeveloperCertificates.map(c => c.toString('base64'));
-			const now = new Date();
+			const provisionCertificatesBase64 = _.map(provisionData.DeveloperCertificates, c => c.toString('base64'));
+			const now = Date.now();
 
-			// this.$iOSDeploymentValidatorBase
 			let appId = provisionData.Entitlements['application-identifier'];
-			provisionData.ApplicationIdentifierPrefix.forEach(prefix => {
+			_.each(provisionData.ApplicationIdentifierPrefix, prefix => {
 				appId = appId.replace(`${prefix}.`, "");
 			});
 
@@ -104,11 +102,11 @@ export class CloudBuildService implements ICloudBuildService {
 				this.$errors.failWithoutHelp(`The specified certificate: ${iOSBuildData.pathToCertificate} is issued by an untrusted organization. Please provide a certificate issued by ${constants.APPLE_INC}`);
 			}
 
-			if (now > provisionData.ExpirationDate) {
+			if (now > provisionData.ExpirationDate.getTime()) {
 				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToProvision} has expired.`);
 			}
 
-			if (now < certInfo.validity.notBefore || now > certInfo.validity.notAfter) {
+			if (now < certInfo.validity.notBefore.getTime() || now > certInfo.validity.notAfter.getTime()) {
 				this.$errors.failWithoutHelp(`The specified certificate: ${iOSBuildData.pathToCertificate} has expired.`);
 			}
 
