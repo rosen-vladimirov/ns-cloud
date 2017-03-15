@@ -2,7 +2,7 @@ import * as path from "path";
 import * as semver from "semver";
 import * as uuid from "uuid";
 import * as constants from "../constants";
-import * as pem from "pem"
+import * as forge from "node-forge";
 const provisioning = require("provisioning");
 
 interface IAmazonStorageEntryData extends CloudService.AmazonStorageEntry {
@@ -17,6 +17,7 @@ export class CloudBuildService implements ICloudBuildService {
 		private $errors: IErrors,
 		private $server: CloudService.IServer,
 		private $mobileHelper: Mobile.IMobileHelper,
+		// private $iOSDeploymentValidatorBase: IIOSDeploymentValidatorBase,
 		private $projectHelper: IProjectHelper) { }
 
 	// We should decorate this method... hacks are needed!!!
@@ -26,7 +27,7 @@ export class CloudBuildService implements ICloudBuildService {
 		iOSBuildData?: IIOSBuildData): Promise<IBuildResultData> {
 
 		// TODO: Add validation for all options before uploading the package to S3.
-		await this.validateBuildProperties(platform, buildConfiguration, androidBuildData, iOSBuildData);
+		await this.validateBuildProperties(platform, buildConfiguration, projectSettings.projectId, androidBuildData, iOSBuildData);
 		let buildProps = await this.prepareBuildRequest(projectSettings, platform, buildConfiguration);
 
 		// TODO: Check with Nadya why we do not receive this information.
@@ -61,7 +62,10 @@ export class CloudBuildService implements ICloudBuildService {
 		};
 	}
 
-	public async validateBuildProperties(platform: string, buildConfiguration: string, androidBuildData?: IAndroidBuildData,
+	public async validateBuildProperties(platform: string,
+		buildConfiguration: string,
+		projectId: string,
+		androidBuildData?: IAndroidBuildData,
 		iOSBuildData?: IIOSBuildData): Promise<void> {
 		if (this.$mobileHelper.isAndroidPlatform(platform) && this.isReleaseConfiguration(buildConfiguration)) {
 			if (!androidBuildData || !androidBuildData.pathToCertificate) {
@@ -84,10 +88,31 @@ export class CloudBuildService implements ICloudBuildService {
 				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToProvision} does not exist. Verify the location is correct.`);
 			}
 
-			let certData = this.getCertificateBase64((await this.getCertificateData(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword)).cert);
-			let provisionCertificatesBase64 = (await this.getMobileProvisionData(iOSBuildData.pathToProvision)).DeveloperCertificates.map(c => c.toString('base64'));
+			const certInfo = this.getCertificateInfo(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword);
+			const certBase64 = this.getCertificateBase64(certInfo.pemCert);
+			const provisionData = await this.getMobileProvisionData(iOSBuildData.pathToProvision);
+			const provisionCertificatesBase64 = provisionData.DeveloperCertificates.map(c => c.toString('base64'));
+			const now = new Date();
 
-			if (!_.includes(provisionCertificatesBase64, certData)) {
+			// this.$iOSDeploymentValidatorBase
+			let appId = provisionData.Entitlements['application-identifier'];
+			provisionData.ApplicationIdentifierPrefix.forEach(prefix => {
+				appId = appId.replace(`${prefix}.`, "");
+			});
+
+			if (certInfo.organization !== constants.APPLE_INC) {
+				this.$errors.failWithoutHelp(`The specified certificate: ${iOSBuildData.pathToCertificate} is issued by an untrusted organization. Please provide a certificate issued by ${constants.APPLE_INC}`);
+			}
+
+			if (now > provisionData.ExpirationDate) {
+				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToProvision} has expired.`);
+			}
+
+			if (now < certInfo.validity.notBefore || now > certInfo.validity.notAfter) {
+				this.$errors.failWithoutHelp(`The specified certificate: ${iOSBuildData.pathToCertificate} has expired.`);
+			}
+
+			if (!_.includes(provisionCertificatesBase64, certBase64)) {
 				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToProvision} does not include the specified certificate: ${iOSBuildData.pathToCertificate}. Please specify a different provision or certificate.`);
 			}
 		}
@@ -152,7 +177,7 @@ export class CloudBuildService implements ICloudBuildService {
 	}
 
 	private getCertificateBase64(cert: string) {
-		return cert.substr(constants.CRYPTO.CERTIFICATE_HEADER.length).slice(0, -constants.CRYPTO.CERTIFICATE_FOOTER.length).replace(/\s/g, "");
+		return cert.replace(/\s/g, "").substr(constants.CRYPTO.CERTIFICATE_HEADER.length).slice(0, -constants.CRYPTO.CERTIFICATE_FOOTER.length);
 	}
 
 	private async getAndroidBuildProperties(projectSettings: IProjectSettings,
@@ -321,34 +346,30 @@ export class CloudBuildService implements ICloudBuildService {
 	}
 
 	private async getCertificateCommonName(certificatePath: string, certificatePassword: string): Promise<string> {
-		return (await this.getCertificateInfo(certificatePath, certificatePassword)).commonName;
+		return this.getCertificateInfo(certificatePath, certificatePassword).commonName;
 	}
 
-	private async getCertificateInfo(certificatePath: string, certificatePassword: string): Promise<pem.CertificateSubjectReadResult> {
-		let certData = await this.getCertificateData(certificatePath, certificatePassword);
-		return new Promise<pem.CertificateSubjectReadResult>((resolve, reject) => {
-			pem.readCertificateInfo(certData.cert, (err, data) => {
-				if (err) {
-					reject(err);
-					return;
-				}
+	private getCertificateInfo(certificatePath: string, certificatePassword: string): ICertificateInfo {
+		const certificateAbsolutePath = path.resolve(certificatePath);
+		const certificateContents: any = this.$fs.readFile(certificateAbsolutePath, { encoding: 'binary' });
+		const pkcs12Asn1 = forge.asn1.fromDer(certificateContents);
+		const pkcs12 = forge.pkcs12.pkcs12FromAsn1(pkcs12Asn1, false, certificatePassword);
 
-				resolve(data);
-			});
-		});
+		for (let safeContens of pkcs12.safeContents) {
+			for (let safeBag of safeContens.safeBags) {
+				if (safeBag.attributes.localKeyId && safeBag.type === forge.pki.oids.certBag) {
+					let issuer = safeBag.cert.issuer.getField(constants.CRYPTO.ORGANIZATION_FIELD_NAME);
+					return {
+						pemCert: forge.pki.certificateToPem(safeBag.cert),
+						organization: issuer && issuer.value,
+						validity: safeBag.cert.validity,
+						commonName: safeBag.cert.subject.getField(constants.CRYPTO.COMMON_NAME_FIELD_NAME).value
 	}
-
-	private async getCertificateData(certificatePath: string, certificatePassword: string): Promise<ICertificateData> {
-		return new Promise<ICertificateData>((resolve, reject) => {
-			pem.readPkcs12(path.resolve(certificatePath), { p12Password: certificatePassword }, (err, data: any) => {
-				if (err) {
-					reject(err);
-					return;
 				}
+			}
+		}
 
-				resolve(data);
-			});
-		});
+		this.$errors.failWithoutHelp(`Could not read ${certificatePath}. Please make sure there is a certificate inside.`);
 	}
 
 	private async getMobileProvisionData(provisionPath: string): Promise<IMobileProvisionData> {

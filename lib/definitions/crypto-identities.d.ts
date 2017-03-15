@@ -8,6 +8,8 @@ interface IMobileProvisionData {
 		'keychain-access-groups': string[];
 		'get-task-allow': boolean;
 		'application-identifier': string;
+		'com.apple.developer.ubiquity-kvstore-identifier': string;
+		'com.apple.developer.ubiquity-container-identifiers': string;
 		'com.apple.developer.team-identifier': string;
 	};
 	ExpirationDate: Date;
@@ -31,8 +33,12 @@ interface ICloudProvisionData {
 	Name: string;
 }
 
-interface ICertificateData {
-	cert: string;
-	ca: any[];
-	key: string;
+interface ICertificateInfo {
+	pemCert: string;
+	organization: string;
+	commonName: string;
+	validity: {
+		notBefore: Date;
+		notAfter: Date;
+	}
 }
