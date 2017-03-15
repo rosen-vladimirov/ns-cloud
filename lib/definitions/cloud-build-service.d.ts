@@ -11,6 +11,7 @@ interface ICloudBuildService {
 		iOSBuildData?: IIOSBuildData): Promise<IBuildResultData>;
 	validateBuildProperties(platform: string,
 		buildConfiguration: string,
+		projectId: string,
 		androidBuildData?: IAndroidBuildData,
 		iOSBuildData?: IIOSBuildData): Promise<void>;
 }
