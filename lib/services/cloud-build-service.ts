@@ -3,7 +3,7 @@ import * as semver from "semver";
 import * as uuid from "uuid";
 import * as constants from "../constants";
 import * as forge from "node-forge";
-const provisioning = require("provisioning");
+const plist = require("simple-plist");
 
 interface IAmazonStorageEntryData extends CloudService.AmazonStorageEntry {
 	fileNameInS3: string;
@@ -89,7 +89,7 @@ export class CloudBuildService implements ICloudBuildService {
 
 			const certInfo = this.getCertificateInfo(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword);
 			const certBase64 = this.getCertificateBase64(certInfo.pemCert);
-			const provisionData = await this.getMobileProvisionData(iOSBuildData.pathToProvision);
+			const provisionData = this.getMobileProvisionData(iOSBuildData.pathToProvision);
 			const provisionCertificatesBase64 = _.map(provisionData.DeveloperCertificates, c => c.toString('base64'));
 			const now = Date.now();
 
@@ -241,7 +241,7 @@ export class CloudBuildService implements ICloudBuildService {
 
 			buildProps.Properties.CertificatePassword = iOSBuildData.certificatePassword;
 			buildProps.Properties.CodeSigningIdentity = await this.getCertificateCommonName(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword);
-			const provisionData = await this.getMobileProvisionData(iOSBuildData.pathToProvision);
+			const provisionData = this.getMobileProvisionData(iOSBuildData.pathToProvision);
 			const cloudProvisionsData: any[] = [{
 				SuffixId: "",
 				TemplateName: "PROVISION_",
@@ -355,14 +355,14 @@ export class CloudBuildService implements ICloudBuildService {
 
 		for (let safeContens of pkcs12.safeContents) {
 			for (let safeBag of safeContens.safeBags) {
-				if (safeBag.attributes.localKeyId && safeBag.type === forge.pki.oids.certBag) {
+				if (safeBag.attributes.localKeyId && safeBag.type === forge.pki.oids['certBag']) {
 					let issuer = safeBag.cert.issuer.getField(constants.CRYPTO.ORGANIZATION_FIELD_NAME);
 					return {
 						pemCert: forge.pki.certificateToPem(safeBag.cert),
 						organization: issuer && issuer.value,
 						validity: safeBag.cert.validity,
 						commonName: safeBag.cert.subject.getField(constants.CRYPTO.COMMON_NAME_FIELD_NAME).value
-	}
+					};
 				}
 			}
 		}
@@ -370,17 +370,10 @@ export class CloudBuildService implements ICloudBuildService {
 		this.$errors.failWithoutHelp(`Could not read ${certificatePath}. Please make sure there is a certificate inside.`);
 	}
 
-	private async getMobileProvisionData(provisionPath: string): Promise<IMobileProvisionData> {
-		return new Promise<IMobileProvisionData>((resolve, reject) => {
-			provisioning(path.resolve(provisionPath), (err: Error, obj: any) => {
-				if (err) {
-					reject(err);
-					return;
-				}
-
-				resolve(obj);
-			});
-		});
+	private getMobileProvisionData(provisionPath: string): IMobileProvisionData {
+		const provisionText = this.$fs.readText(path.resolve(provisionPath));
+		const provisionPlistText = provisionText.substring(provisionText.indexOf(constants.CRYPTO.PLIST_HEADER), provisionText.indexOf(constants.CRYPTO.PLIST_FOOTER) + constants.CRYPTO.PLIST_FOOTER.length)
+		return plist.parse(provisionPlistText);
 	}
 
 	private isReleaseConfiguration(buildConfiguration: string): boolean {
