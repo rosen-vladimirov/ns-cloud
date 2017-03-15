@@ -125,6 +125,10 @@ export class CloudBuildService implements ICloudBuildService {
 				errors.push(`The specified provision: ${iOSBuildData.pathToProvision} does not include the specified certificate: ${iOSBuildData.pathToCertificate}. Please specify a different provision or certificate.`);
 			}
 
+			if (iOSBuildData.deviceIdentifier && !_.includes(provisionData.ProvisionedDevices, iOSBuildData.deviceIdentifier)) {
+				errors.push(`The specified provision: ${iOSBuildData.pathToProvision} does not include the specified device: ${iOSBuildData.deviceIdentifier}.`);
+			}
+
 			if (errors.length) {
 				this.$errors.failWithoutHelp(errors.join(EOL))
 			}
