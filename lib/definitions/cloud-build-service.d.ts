@@ -32,4 +32,5 @@ interface IIOSBuildData extends IBuildForDevice {
 	pathToProvision: string;
 	pathToCertificate: string;
 	certificatePassword: string;
+	deviceIdentifier?: string;
 }
