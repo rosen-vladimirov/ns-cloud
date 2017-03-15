@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as semver from "semver";
 import * as uuid from "uuid";
+import { EOL } from "os";
 import * as constants from "../constants";
 import * as forge from "node-forge";
 const plist = require("simple-plist");
@@ -63,7 +64,7 @@ export class CloudBuildService implements ICloudBuildService {
 
 	public async validateBuildProperties(platform: string,
 		buildConfiguration: string,
-		projectId: string,
+		appId: string,
 		androidBuildData?: IAndroidBuildData,
 		iOSBuildData?: IIOSBuildData): Promise<void> {
 		if (this.$mobileHelper.isAndroidPlatform(platform) && this.isReleaseConfiguration(buildConfiguration)) {
@@ -93,25 +94,39 @@ export class CloudBuildService implements ICloudBuildService {
 			const provisionCertificatesBase64 = _.map(provisionData.DeveloperCertificates, c => c.toString('base64'));
 			const now = Date.now();
 
-			let appId = provisionData.Entitlements['application-identifier'];
+			let provisionAppId = provisionData.Entitlements['application-identifier'];
 			_.each(provisionData.ApplicationIdentifierPrefix, prefix => {
-				appId = appId.replace(`${prefix}.`, "");
+				provisionAppId = provisionAppId.replace(`${prefix}.`, "");
 			});
 
+			let errors: string[] = []
+
+			if (provisionAppId !== "*") {
+				let provisionIdentifierPattern = new RegExp(this.getRegexPattern(provisionAppId));
+				if (!provisionIdentifierPattern.test(appId)) {
+					errors.push(`The specified provision's (${iOSBuildData.pathToProvision}) application identifier (${provisionAppId}) doesn't match your project's application identifier (${appId}).`);
+				}
+			}
+
+
 			if (certInfo.organization !== constants.APPLE_INC) {
-				this.$errors.failWithoutHelp(`The specified certificate: ${iOSBuildData.pathToCertificate} is issued by an untrusted organization. Please provide a certificate issued by ${constants.APPLE_INC}`);
+				errors.push(`The specified certificate: ${iOSBuildData.pathToCertificate} is issued by an untrusted organization. Please provide a certificate issued by ${constants.APPLE_INC}`);
 			}
 
 			if (now > provisionData.ExpirationDate.getTime()) {
-				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToProvision} has expired.`);
+				errors.push(`The specified provision: ${iOSBuildData.pathToProvision} has expired.`);
 			}
 
 			if (now < certInfo.validity.notBefore.getTime() || now > certInfo.validity.notAfter.getTime()) {
-				this.$errors.failWithoutHelp(`The specified certificate: ${iOSBuildData.pathToCertificate} has expired.`);
+				errors.push(`The specified certificate: ${iOSBuildData.pathToCertificate} has expired.`);
 			}
 
 			if (!_.includes(provisionCertificatesBase64, certBase64)) {
-				this.$errors.failWithoutHelp(`The specified provision: ${iOSBuildData.pathToProvision} does not include the specified certificate: ${iOSBuildData.pathToCertificate}. Please specify a different provision or certificate.`);
+				errors.push(`The specified provision: ${iOSBuildData.pathToProvision} does not include the specified certificate: ${iOSBuildData.pathToCertificate}. Please specify a different provision or certificate.`);
+			}
+
+			if (errors.length) {
+				this.$errors.failWithoutHelp(errors.join(EOL))
 			}
 		}
 	}
@@ -378,6 +393,21 @@ export class CloudBuildService implements ICloudBuildService {
 
 	private isReleaseConfiguration(buildConfiguration: string): boolean {
 		return buildConfiguration.toLowerCase() === constants.RELEASE_CONFIGURATION_NAME;
+	}
+
+	private getRegexPattern(appIdentifier: string): string {
+		let starPlaceholder = "<!StarPlaceholder!>";
+		let escapedIdentifier = this.escape(this.stringReplaceAll(appIdentifier, "*", starPlaceholder));
+		let replacedIdentifier = this.stringReplaceAll(escapedIdentifier, starPlaceholder, ".*");
+		return "^" + replacedIdentifier + "$";
+	}
+
+	private escape(s: string): string {
+		return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+	}
+
+	private stringReplaceAll(inputString: string, find: any, replace: string): string {
+		return inputString.split(find).join(replace);
 	}
 }
 $injector.register("cloudBuildService", CloudBuildService);
