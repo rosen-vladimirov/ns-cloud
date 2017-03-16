@@ -207,7 +207,7 @@ export class CloudBuildService implements ICloudBuildService {
 			const certificateS3Data = await this.uploadFileToS3(projectSettings.projectId, androidBuildData.pathToCertificate);
 
 			buildProps.Properties.keyStoreName = certificateS3Data.fileNameInS3;
-			buildProps.Properties.keyStoreAlias = await this.getCertificateInfo(androidBuildData.pathToCertificate, androidBuildData.certificatePassword).friendlyName
+			buildProps.Properties.keyStoreAlias = this.getCertificateInfo(androidBuildData.pathToCertificate, androidBuildData.certificatePassword).friendlyName
 			buildProps.Properties.keyStorePassword = androidBuildData.certificatePassword;
 			buildProps.Properties.keyStoreAliasPassword = androidBuildData.certificatePassword;
 
@@ -259,7 +259,7 @@ export class CloudBuildService implements ICloudBuildService {
 			);
 
 			buildProps.Properties.CertificatePassword = iOSBuildData.certificatePassword;
-			buildProps.Properties.CodeSigningIdentity = await this.getCertificateInfo(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword).commonName;
+			buildProps.Properties.CodeSigningIdentity = this.getCertificateInfo(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword).commonName;
 			const provisionData = this.getMobileProvisionData(iOSBuildData.pathToProvision);
 			const cloudProvisionsData: any[] = [{
 				SuffixId: "",
