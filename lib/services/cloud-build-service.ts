@@ -207,7 +207,7 @@ export class CloudBuildService implements ICloudBuildService {
 			const certificateS3Data = await this.uploadFileToS3(projectSettings.projectId, androidBuildData.pathToCertificate);
 
 			buildProps.Properties.keyStoreName = certificateS3Data.fileNameInS3;
-			buildProps.Properties.keyStoreAlias = await this.getCertificateCommonName(androidBuildData.pathToCertificate, androidBuildData.certificatePassword);
+			buildProps.Properties.keyStoreAlias = await this.getCertificateInfo(androidBuildData.pathToCertificate, androidBuildData.certificatePassword).friendlyName
 			buildProps.Properties.keyStorePassword = androidBuildData.certificatePassword;
 			buildProps.Properties.keyStoreAliasPassword = androidBuildData.certificatePassword;
 
@@ -259,7 +259,7 @@ export class CloudBuildService implements ICloudBuildService {
 			);
 
 			buildProps.Properties.CertificatePassword = iOSBuildData.certificatePassword;
-			buildProps.Properties.CodeSigningIdentity = await this.getCertificateCommonName(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword);
+			buildProps.Properties.CodeSigningIdentity = await this.getCertificateInfo(iOSBuildData.pathToCertificate, iOSBuildData.certificatePassword).commonName;
 			const provisionData = this.getMobileProvisionData(iOSBuildData.pathToProvision);
 			const cloudProvisionsData: any[] = [{
 				SuffixId: "",
@@ -362,10 +362,6 @@ export class CloudBuildService implements ICloudBuildService {
 		}
 	}
 
-	private async getCertificateCommonName(certificatePath: string, certificatePassword: string): Promise<string> {
-		return this.getCertificateInfo(certificatePath, certificatePassword).commonName;
-	}
-
 	private getCertificateInfo(certificatePath: string, certificatePassword: string): ICertificateInfo {
 		const certificateAbsolutePath = path.resolve(certificatePath);
 		const certificateContents: any = this.$fs.readFile(certificateAbsolutePath, { encoding: 'binary' });
@@ -380,7 +376,8 @@ export class CloudBuildService implements ICloudBuildService {
 						pemCert: forge.pki.certificateToPem(safeBag.cert),
 						organization: issuer && issuer.value,
 						validity: safeBag.cert.validity,
-						commonName: safeBag.cert.subject.getField(constants.CRYPTO.COMMON_NAME_FIELD_NAME).value
+						commonName: safeBag.cert.subject.getField(constants.CRYPTO.COMMON_NAME_FIELD_NAME).value,
+						friendlyName: _.head<string>(safeBag.attributes.friendlyName)
 					};
 				}
 			}

@@ -37,6 +37,7 @@ interface ICertificateInfo {
 	pemCert: string;
 	organization: string;
 	commonName: string;
+	friendlyName: string;
 	validity: {
 		notBefore: Date;
 		notAfter: Date;
